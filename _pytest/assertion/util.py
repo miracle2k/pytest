@@ -256,32 +256,70 @@ def _compare_eq_set(left, right, verbose=False):
     return explanation
 
 
-def _compare_eq_dict(left, right, verbose=False):
-    explanation = []
+def make_key(prefix, k):
+    return '%s.%s' % (prefix, k) if prefix else k
+
+
+UNSET = object()
+
+
+def collect_diff_keys_from_list(left, right, result=None, prefix=None):
+    if result is None:
+        result = []
+
+    for idx, (left, right) in enumerate(zip(left, right)):
+        k = make_key(prefix, '[%s]' % idx)
+
+        if isinstance(left, dict) and isinstance(right, dict):
+            collect_diff_keys_from_dict(left, right, result=result, prefix=k)
+
+        else:
+            if left != right:
+                result.append((k, left, right))
+
+
+def collect_diff_keys_from_dict(left, right, result=None, prefix=None):
+    if result is None:
+        result = []
+
     common = set(left).intersection(set(right))
     same = dict((k, left[k]) for k in common if left[k] == right[k])
-    if same and verbose < 2:
-        explanation += [u('Omitting %s identical items, use -vv to show') %
-                        len(same)]
-    elif same:
-        explanation += [u('Common items:')]
-        explanation += pprint.pformat(same).splitlines()
     diff = set(k for k in common if left[k] != right[k])
-    if diff:
-        explanation += [u('Differing items:')]
-        for k in diff:
-            explanation += [py.io.saferepr({k: left[k]}) + ' != ' +
-                            py.io.saferepr({k: right[k]})]
     extra_left = set(left) - set(right)
-    if extra_left:
-        explanation.append(u('Left contains more items:'))
-        explanation.extend(pprint.pformat(
-            dict((k, left[k]) for k in extra_left)).splitlines())
     extra_right = set(right) - set(left)
-    if extra_right:
-        explanation.append(u('Right contains more items:'))
-        explanation.extend(pprint.pformat(
-            dict((k, right[k]) for k in extra_right)).splitlines())
+
+    for k in extra_left:
+        result.append((make_key(prefix, k), left[k], UNSET))
+    for k in extra_right:
+        result.append((make_key(prefix, k), UNSET, right[k]))
+
+    for k in diff:
+        handled = False
+        if isinstance(left[k], dict) and isinstance(right[k], dict):
+            subprefix = make_key(prefix, k)
+            collect_diff_keys_from_dict(left, right, result=result, prefix=subprefix)
+            handled = True
+
+        elif isinstance(left[k], list) and isinstance(right[k], list):
+            if len(left[k]) == len(right[k]):
+                subprefix = make_key(prefix, k)
+                collect_diff_keys_from_list(left[k], right[k], result=result, prefix=subprefix)
+                handled = True
+
+        if not handled:
+            result.append((make_key(prefix, k), left[k], right[k]))
+
+    return result
+
+
+def _compare_eq_dict(left, right, verbose=False):
+    diff = collect_diff_keys_from_dict(left, right)
+    import pdb; pdb.set_trace()
+    explanation = []
+    for k, left, right in diff:
+        explanation.append(
+            '%s: %s -> %s' % (k, '-' if left is UNSET else left, '-' if right is UNSET else right)
+        )
     return explanation
 
 

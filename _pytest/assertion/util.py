@@ -313,6 +313,9 @@ def collect_diff_keys_from_dict(left, right, result=None, prefix=None):
 
 
 def _compare_eq_dict(left, right, verbose=False):
+    """
+    https://github.com/pytest-dev/pytest/issues/1531
+    """
     diff = collect_diff_keys_from_dict(left, right)
     import pdb; pdb.set_trace()
     explanation = []
